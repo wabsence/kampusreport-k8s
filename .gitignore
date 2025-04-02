@@ -1,0 +1,49 @@
+# Ignore Kubernetes secrets and sensitive data
+*.crt
+*.key
+*.pem
+*.enc
+secrets.yaml
+secrets/
+*-secret.yaml
+
+
+# Ignore kubeconfig files
+.kube/
+kubeconfig
+
+# Ignore Terraform and Helm-related files (if used)
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.tfvars.json
+helm-release.yaml
+charts/
+
+# Ignore Kubernetes cache and logs
+.kube/cache/
+logs/
+*.log
+
+# Ignore environment variables and configuration files
+.env
+*.env
+config.yaml
+config.json
+*-config.yaml
+
+
+# Ignore build artifacts and temporary files
+*.swp
+*.bak
+*.tmp
+*.DS_Store
+Thumbs.db
+node_modules/
+dist/
+vendor/
+
+# Ignore Docker-related files
+.dockerignore
+docker-compose.override.yml

@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: app-kampusreport-migrationjob
+spec:
+  ttlSecondsAfterFinished: 100  # Delete the Job 100 seconds after completion
+  template:
+    spec:
+      containers:
+        - name: kampusreport
+          image: wabsense/kampusreport:2.0
+          imagePullPolicy: IfNotPresent  # Pull only if not available locally
+          envFrom:
+            - configMapRef:
+                name: app-kampusreport-configmap
+            - secretRef:
+                name: app-kampusreport-secret
+          command: ["php", "artisan", "migrate:fresh", "--seed"]
+      imagePullSecrets:
+        - name: dockerhub-secret
+      restartPolicy: Never
+  backoffLimit: 1

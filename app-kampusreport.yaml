@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-kampusreport
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-kampusreport
+  template:
+    metadata:
+      labels:
+        app: app-kampusreport
+    spec:
+      initContainers:
+        - name: init-copy-code
+          image: wabsense/kampusreport:2.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Copying Laravel files to PVC..."
+              cp -R /var/www/kampus_report/. /mnt/app-code/
+              echo "Done!"
+          volumeMounts:
+            - mountPath: /mnt/app-code
+              name: app-code
+        - name: init-storage-structure
+          image: wabsense/kampusreport:2.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Creating storage directory structure..."
+              mkdir -p /mnt/storage/app
+              mkdir -p /mnt/storage/framework/cache
+              mkdir -p /mnt/storage/framework/sessions
+              mkdir -p /mnt/storage/framework/views
+              mkdir -p /mnt/storage/logs
+              chmod -R 777 /mnt/storage
+              echo "Storage structure created successfully!"
+          volumeMounts:
+            - mountPath: /mnt/storage
+              name: app-kampusreport-storage
+        - name: init-laravel-setup
+          image: wabsense/kampusreport:2.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Setting up Laravel environment..."
+              cd /mnt/app-code
+              
+              # Ensure .env file exists
+              if [ ! -f .env ]; then
+                echo "Creating new .env file from example..."
+                cp -f .env.example .env
+              fi
+              
+              # Generate and set APP_KEY in .env file if not already set
+              if ! grep -q "^APP_KEY=base64:" .env || grep -q "^APP_KEY=$" .env; then
+                echo "Generating new APP_KEY..."
+                php artisan key:generate --force
+                echo "APP_KEY generated successfully!"
+              else
+                echo "APP_KEY already exists in .env file."
+              fi
+              
+              # Set proper permissions for all files
+              echo "Setting permissions for Laravel files..."
+              chmod -R 777 /mnt/app-code/storage
+              mkdir -p /mnt/app-code/bootstrap/cache
+              chmod -R 777 /mnt/app-code/bootstrap/cache
+              
+              # Generate Laravel cache
+              echo "Optimizing Laravel application..."
+              php artisan optimize --force
+              
+              echo "Laravel setup completed successfully!"
+          volumeMounts:
+            - name: app-code
+              mountPath: /mnt/app-code
+            - name: app-kampusreport-storage
+              mountPath: /mnt/app-code/storage
+      containers:
+        - name: kampusreport
+          image: wabsense/kampusreport:2.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # Double-check permissions
+              echo "Verifying permissions..."
+              chmod -R 777 /var/www/kampus_report/storage
+              chmod -R 777 /var/www/kampus_report/bootstrap/cache
+              
+              # Modify PHP-FPM to listen on all interfaces
+              echo "Configuring PHP-FPM to listen on all interfaces..."
+              sed -i 's/listen = 127.0.0.1:9000/listen = 9000/g' /usr/local/etc/php-fpm.d/www.conf
+              
+              # Start PHP-FPM
+              echo "Starting PHP-FPM..."
+              php-fpm
+          envFrom:
+            - configMapRef:
+                name: app-kampusreport-configmap
+            - secretRef:
+                name: app-kampusreport-secret
+          ports:
+            - containerPort: 9000
+          volumeMounts:
+            - name: app-code
+              mountPath: /var/www/kampus_report
+            - name: app-kampusreport-storage
+              mountPath: /var/www/kampus_report/storage
+      volumes:
+        - name: app-code
+          persistentVolumeClaim:
+            claimName: app-code-claim
+        - name: app-kampusreport-storage
+          persistentVolumeClaim:
+            claimName: app-kampusreport-storage-pvc
+      imagePullSecrets:
+        - name: dockerhub-secret
